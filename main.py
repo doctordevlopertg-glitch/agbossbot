@@ -1,7 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
 
 # ================= CONFIG =================
 
@@ -12,6 +11,7 @@ BOT_TOKEN = "8965308397:AAFlZZglV1p5z4o4Caovgw6BaJu2K0oYpYs"
 MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appName=Cluster0"
 
 ADMIN_ID = 7960300322
+
 
 
 
@@ -76,7 +76,7 @@ async def class_open(client, query):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ================= CHAPTER (SEND ALL VIDEOS) =================
+# ================= CHAPTER =================
 
 @app.on_callback_query(filters.regex("^chapter_"))
 async def chapter_open(client, query):
@@ -100,6 +100,20 @@ async def chapter_open(client, query):
             protect_content=True
         )
 
+    # ================= YOUR CUSTOM MESSAGE =================
+
+    await client.send_message(
+        query.message.chat.id,
+        """
+🙏 Thanks for using me!
+
+If you need any other lectures of **@llen bun academy sarbam see ww**  
+or any teacher you may message here 👇
+
+👉 @THE_PHYSICS_LAD_BACKUP
+"""
+    )
+
 # ================= ADMIN ADD =================
 
 @app.on_message(filters.command("add"))
@@ -120,13 +134,10 @@ async def text_handler(client, message):
     if message.from_user.id != ADMIN_ID:
         return
 
-    # ========== UPLOAD ==========
     state = UPLOAD_STATE.get(message.from_user.id)
 
+    # UPLOAD FLOW
     if state:
-
-        if message.text.startswith("/"):
-            return
 
         if state["step"] == "class":
 
@@ -144,13 +155,10 @@ async def text_handler(client, message):
             await message.reply_text("📤 Send videos, /done when finished")
             return
 
-    # ========== DELETE ==========
+    # DELETE FLOW
     dstate = DELETE_STATE.get(message.from_user.id)
 
     if dstate:
-
-        if message.text.startswith("/"):
-            return
 
         if dstate["step"] == "class":
 
@@ -172,8 +180,8 @@ async def text_handler(client, message):
             await message.reply_text("🗑 Chapter Deleted")
             return
 
-    # ========== BROADCAST ==========
-    if message.from_user.id in BROADCAST_STATE:
+    # BROADCAST FLOW
+    if BROADCAST_STATE.get("active"):
 
         users_list = await users.find().to_list(length=10000)
 
@@ -186,7 +194,7 @@ async def text_handler(client, message):
             except:
                 pass
 
-        BROADCAST_STATE.pop(message.from_user.id, None)
+        BROADCAST_STATE["active"] = False
 
         await message.reply_text(f"📢 Sent to {sent} users")
 
@@ -264,7 +272,7 @@ async def broadcast(client, message):
     if message.from_user.id != ADMIN_ID:
         return
 
-    BROADCAST_STATE[message.from_user.id] = True
+    BROADCAST_STATE["active"] = True
 
     await message.reply_text("📢 Send message to broadcast")
 
