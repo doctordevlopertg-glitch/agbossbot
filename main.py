@@ -1,19 +1,17 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
+from bson import ObjectId
 
 # ================= CONFIG =================
 
-API_ID = 39683282
-API_HASH = "ab1cc41ca283d480ebe386b1dce182f3"
-BOT_TOKEN = "8965308397:AAFlZZglV1p5z4o4Caovgw6BaJu2K0oYpYs"
+API_ID = 123456
+API_HASH = "YOUR_API_HASH"
+BOT_TOKEN = "YOUR_BOT_TOKEN"
 
-MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appName=Cluster0"
+MONGO_URI = "YOUR_MONGO_URI"
 
-ADMIN_ID = 7960300322
-
-
-
+ADMIN_ID = 123456789
 
 # ================= BOT =================
 
@@ -24,18 +22,28 @@ app = Client(
     bot_token=BOT_TOKEN
 )
 
-mongo = AsyncIOMotorClient(MONGO_URI)
-db = mongo["lecture_bot"]
-lectures = db["lectures"]
+db_client = AsyncIOMotorClient(MONGO_URI)
+db = db_client["lecture_bot"]
 
-# ================= STATE =================
+lectures = db["lectures"]
+users = db["users"]
+
+# ================= STATES =================
 
 UPLOAD_STATE = {}
+DELETE_STATE = {}
+BROADCAST_STATE = {}
 
 # ================= START =================
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
+
+    await users.update_one(
+        {"id": message.from_user.id},
+        {"$set": {"id": message.from_user.id}},
+        upsert=True
+    )
 
     buttons = [
         [InlineKeyboardButton("📚 Class 11th", callback_data="class_11")],
@@ -86,10 +94,11 @@ async def chapter_open(client, query):
         await client.send_video(
             chat_id=query.message.chat.id,
             video=v["file_id"],
-            caption=v.get("caption", "")
+            caption=v.get("caption", ""),
+            protect_content=True
         )
 
-# ================= ADMIN /add =================
+# ================= ADMIN ADD =================
 
 @app.on_message(filters.command("add"))
 async def add(client, message):
@@ -109,30 +118,75 @@ async def text_handler(client, message):
     if message.from_user.id != ADMIN_ID:
         return
 
+    # ========== UPLOAD ==========
     state = UPLOAD_STATE.get(message.from_user.id)
-    if not state:
-        return
 
-    if message.text.startswith("/"):
-        return
+    if state:
 
-    if state["step"] == "class":
+        if message.text.startswith("/"):
+            return
 
-        state["class"] = message.text.strip()
-        state["step"] = "chapter"
+        if state["step"] == "class":
 
-        await message.reply_text("📖 Send Chapter Name")
-        return
+            state["class"] = message.text.strip()
+            state["step"] = "chapter"
 
-    if state["step"] == "chapter":
+            await message.reply_text("📖 Send Chapter Name")
+            return
 
-        state["chapter"] = message.text.strip()
-        state["step"] = "videos"
+        if state["step"] == "chapter":
 
-        await message.reply_text(
-            "📤 Now send all videos one by one.\nSend /done when finished"
-        )
-        return
+            state["chapter"] = message.text.strip()
+            state["step"] = "videos"
+
+            await message.reply_text("📤 Send videos, /done when finished")
+            return
+
+    # ========== DELETE ==========
+    dstate = DELETE_STATE.get(message.from_user.id)
+
+    if dstate:
+
+        if message.text.startswith("/"):
+            return
+
+        if dstate["step"] == "class":
+
+            dstate["class"] = message.text.strip()
+            dstate["step"] = "chapter"
+
+            await message.reply_text("📖 Send Chapter Name to delete")
+            return
+
+        if dstate["step"] == "chapter":
+
+            await lectures.delete_many({
+                "class": dstate["class"],
+                "chapter": message.text.strip()
+            })
+
+            DELETE_STATE.pop(message.from_user.id, None)
+
+            await message.reply_text("🗑 Chapter Deleted")
+            return
+
+    # ========== BROADCAST ==========
+    if message.from_user.id in BROADCAST_STATE:
+
+        users_list = await users.find().to_list(length=10000)
+
+        sent = 0
+
+        for u in users_list:
+            try:
+                await client.send_message(u["id"], message.text)
+                sent += 1
+            except:
+                pass
+
+        BROADCAST_STATE.pop(message.from_user.id, None)
+
+        await message.reply_text(f"📢 Sent to {sent} users")
 
 # ================= SAVE VIDEO =================
 
@@ -166,7 +220,51 @@ async def done(client, message):
 
     UPLOAD_STATE.pop(message.from_user.id, None)
 
-    await message.reply_text("✅ Upload Completed")
+    await message.reply_text("✅ Upload Finished")
+
+# ================= DELETE CHAPTER =================
+
+@app.on_message(filters.command("delchapter"))
+async def delchapter(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    DELETE_STATE[message.from_user.id] = {"step": "class"}
+
+    await message.reply_text("📚 Send Class")
+
+# ================= STATS =================
+
+@app.on_message(filters.command("stats"))
+async def stats(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    u = await users.count_documents({})
+    l = await lectures.count_documents({})
+
+    await message.reply_text(
+        f"""
+📊 Stats
+
+👥 Users: {u}
+📚 Lectures: {l}
+"""
+    )
+
+# ================= BROADCAST =================
+
+@app.on_message(filters.command("broadcast"))
+async def broadcast(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    BROADCAST_STATE[message.from_user.id] = True
+
+    await message.reply_text("📢 Send message to broadcast")
 
 # ================= RUN =================
 
