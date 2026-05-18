@@ -28,6 +28,10 @@ db = mongo["lecture_bot"]
 
 lectures = db["lectures"]
 
+# ================= STATES =================
+
+UPLOAD_STATE = {}
+
 # ================= START =================
 
 @app.on_message(filters.command("start"))
@@ -126,61 +130,6 @@ async def send_video(client, query):
 🎥 {lec['lecture_name']}
 """
     )
-
-# ================= ADMIN UPLOAD =================
-
-@app.on_message(filters.video & filters.private)
-async def upload_lecture(client, message):
-
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    if not message.caption:
-
-        return await message.reply_text(
-            "❌ Use Caption:\n\n11|Mechanics|1|Lecture 1"
-        )
-
-    try:
-
-        data = message.caption.split("|")
-
-        class_name = data[0].strip()
-
-        chapter = data[1].strip()
-
-        lecture_no = int(data[2].strip())
-
-        lecture_name = data[3].strip()
-
-        file_id = message.video.file_id
-
-        await lectures.insert_one({
-
-            "class": class_name,
-
-            "chapter": chapter,
-
-            "lecture_no": lecture_no,
-
-            "lecture_name": lecture_name,
-
-            "file_id": file_id
-
-        })
-
-        await message.reply_text(
-            f"✅ Saved\n\n{lecture_name}"
-        )
-
-    except Exception as e:
-
-        await message.reply_text(
-            f"❌ Error\n{e}"
-        )
-# ================= STATES =================
-
-UPLOAD_STATE = {}
 
 # ================= ADD COMMAND =================
 
@@ -296,6 +245,9 @@ async def save_video(client, message):
 
 # ================= DONE =================
 
+@app.on_message(filters.command("done"))
+async def done_upload(client, message):
+
     if message.from_user.id != ADMIN_ID:
         return
 
@@ -306,6 +258,7 @@ async def save_video(client, message):
     await message.reply_text(
         "✅ Upload Finished"
     )
+
 # ================= RUN =================
 
 print("Bot Started...")
