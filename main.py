@@ -13,6 +13,9 @@ MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appNam
 
 ADMIN_ID = 7960300322
 
+
+
+
 # ================= BOT =================
 
 app = Client(
@@ -23,12 +26,10 @@ app = Client(
 )
 
 mongo = AsyncIOMotorClient(MONGO_URI)
-
 db = mongo["lecture_bot"]
-
 lectures = db["lectures"]
 
-# ================= STATES =================
+# ================= STATE =================
 
 UPLOAD_STATE = {}
 
@@ -43,7 +44,7 @@ async def start(client, message):
     ]
 
     await message.reply_text(
-        "❤️ Welcome To Lecture Bot\n\nSelect Your Class",
+        "📚 Select Your Class",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -54,23 +55,12 @@ async def class_open(client, query):
 
     class_name = query.data.split("_")[1]
 
-    chapter_list = await lectures.distinct(
-        "chapter",
-        {"class": class_name}
-    )
+    chapters = await lectures.distinct("chapter", {"class": class_name})
 
-    buttons = []
-
-    for chapter in chapter_list:
-
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    chapter,
-                    callback_data=f"chapter_{class_name}_{chapter}"
-                )
-            ]
-        )
+    buttons = [
+        [InlineKeyboardButton(ch, callback_data=f"chapter_{class_name}_{ch}")]
+        for ch in chapters
+    ]
 
     await query.message.edit_text(
         "📖 Select Chapter",
@@ -83,123 +73,83 @@ async def class_open(client, query):
 async def chapter_open(client, query):
 
     data = query.data.split("_")
-
     class_name = data[1]
-
     chapter = "_".join(data[2:])
 
-    lecture_list = lectures.find({
+    vids = await lectures.find({
         "class": class_name,
         "chapter": chapter
-    }).sort("lecture_no", 1)
+    }).to_list(length=1000)
 
     buttons = []
 
-    async for lec in lecture_list:
-
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    lec["lecture_name"],
-                    callback_data=f"lecture_{lec['_id']}"
-                )
-            ]
-        )
+    for lec in vids:
+        buttons.append([
+            InlineKeyboardButton("▶️ Watch Video", callback_data=f"vid_{lec['_id']}")
+        ])
 
     await query.message.edit_text(
-        f"🎥 {chapter} Lectures",
+        f"📖 {chapter}",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
 # ================= SEND VIDEO =================
 
-@app.on_callback_query(filters.regex("^lecture_"))
+@app.on_callback_query(filters.regex("^vid_"))
 async def send_video(client, query):
 
     lec_id = query.data.split("_")[1]
 
-    lec = await lectures.find_one({
-        "_id": ObjectId(lec_id)
-    })
+    lec = await lectures.find_one({"_id": ObjectId(lec_id)})
 
     await query.message.reply_video(
-        video=lec["file_id"],
-        caption=f"""
-📚 Class {lec['class']}
-📖 {lec['chapter']}
-🎥 {lec['lecture_name']}
-"""
+        video=lec["file_id"]
     )
 
-# ================= ADD COMMAND =================
+# ================= ADMIN ADD =================
 
 @app.on_message(filters.command("add"))
-async def add_lecture(client, message):
+async def add(client, message):
 
     if message.from_user.id != ADMIN_ID:
         return
 
-    UPLOAD_STATE[message.from_user.id] = {
-        "step": "class"
-    }
+    UPLOAD_STATE[message.from_user.id] = {"step": "class"}
 
-    await message.reply_text(
-        "📚 Send Class\n\nExample: 11 or 12"
-    )
+    await message.reply_text("📚 Send Class (11 or 12)")
 
-# ================= HANDLE TEXT =================
+# ================= TEXT HANDLER =================
 
 @app.on_message(filters.text & filters.private)
-async def handle_text(client, message):
+async def text_handler(client, message):
 
     if message.from_user.id != ADMIN_ID:
+        return
+
+    state = UPLOAD_STATE.get(message.from_user.id)
+    if not state:
         return
 
     if message.text.startswith("/"):
         return
 
-    state = UPLOAD_STATE.get(message.from_user.id)
-
-    if not state:
-        return
-
-    # CLASS
-
     if state["step"] == "class":
 
         state["class"] = message.text.strip()
-
         state["step"] = "chapter"
 
-        await message.reply_text(
-            "📖 Send Chapter Name"
-        )
-
+        await message.reply_text("📖 Send Chapter Name")
         return
-
-    # CHAPTER
 
     if state["step"] == "chapter":
 
         state["chapter"] = message.text.strip()
-
         state["step"] = "videos"
 
-        state["lecture_no"] = 1
-
-        await message.reply_text(
-            """
-✅ Chapter Set
-
-Now send videos one by one.
-
-Send /done when finished.
-"""
-        )
-
+        await message.reply_text("📤 Now send all videos one by one")
         return
 
-# ================= SAVE VIDEOS =================
+# ================= SAVE VIDEO =================
 
 @app.on_message(filters.video & filters.private)
 async def save_video(client, message):
@@ -209,55 +159,28 @@ async def save_video(client, message):
 
     state = UPLOAD_STATE.get(message.from_user.id)
 
-    if not state:
+    if not state or state["step"] != "videos":
         return
-
-    if state["step"] != "videos":
-        return
-
-    class_name = state["class"]
-
-    chapter = state["chapter"]
-
-    lecture_no = state["lecture_no"]
-
-    file_id = message.video.file_id
 
     await lectures.insert_one({
-
-        "class": class_name,
-
-        "chapter": chapter,
-
-        "lecture_no": lecture_no,
-
-        "lecture_name": f"Lecture {lecture_no}",
-
-        "file_id": file_id
-
+        "class": state["class"],
+        "chapter": state["chapter"],
+        "file_id": message.video.file_id
     })
 
-    await message.reply_text(
-        f"✅ Saved Lecture {lecture_no}"
-    )
-
-    state["lecture_no"] += 1
+    await message.reply_text("✅ Saved")
 
 # ================= DONE =================
 
 @app.on_message(filters.command("done"))
-async def done_upload(client, message):
+async def done(client, message):
 
     if message.from_user.id != ADMIN_ID:
         return
 
-    if message.from_user.id in UPLOAD_STATE:
+    UPLOAD_STATE.pop(message.from_user.id, None)
 
-        del UPLOAD_STATE[message.from_user.id]
-
-    await message.reply_text(
-        "✅ Upload Finished"
-    )
+    await message.reply_text("✅ Upload Completed")
 
 # ================= RUN =================
 
