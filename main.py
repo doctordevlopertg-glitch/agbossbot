@@ -125,13 +125,20 @@ async def chapter_open(_, q):
 
     await q.message.delete()
 
-    for v in vids:
-        await app.send_video(
-            q.message.chat.id,
-            v["file_id"],
-            caption=v.get("caption", ""),
-            protect_content=True
-        )
+   import time
+
+for v in vids:
+
+    sent = await app.send_video(
+        q.message.chat.id,
+        v["file_id"],
+        caption=v.get("caption", ""),
+        protect_content=True
+    )
+
+    # 🔥 delete after 24 hours
+    await sent.schedule_delete(time.time() + 86400)
+        
 
     await app.send_message(
         q.message.chat.id,
