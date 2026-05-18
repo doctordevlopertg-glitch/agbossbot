@@ -140,7 +140,7 @@ async def chapter_open(_, q):
 
     await app.send_message(
         q.message.chat.id,
-        "🙏 Enjoy your lectures!\nAuto-delete in 24 hours enabled."
+        "🙏 Enjoy your lectures!\nAuto-delete in 24 hours enabled. IF YOU WANT TO ACCEES IT PERMANENTLY WITHOUT COPYRIGHT ISSUES OR ANY OTHER ALL*N BUN ACADEMY SEE W SARVAM OR ANY OTHER LECTURES BOTH HINDI AND ENGLISH MEDIUM MESSAGE HERE @THE_PHYSICS_LAD_BACKUP"
     )
 
 # ================= AUTO DELETE FUNCTION =================
