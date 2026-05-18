@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
+import asyncio
 
 # ================= CONFIG =================
 
@@ -11,6 +12,8 @@ BOT_TOKEN = "8965308397:AAFlZZglV1p5z4o4Caovgw6BaJu2K0oYpYs"
 MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appName=Cluster0"
 
 ADMIN_ID = 7960300322
+
+
 
 # ================= APP =================
 
@@ -68,13 +71,11 @@ async def start(_, msg):
 @app.on_callback_query(filters.regex("^admin_"))
 async def admin_panel(_, q):
 
-    uid = q.from_user.id
-
-    if uid != ADMIN_ID:
+    if q.from_user.id != ADMIN_ID:
         return await q.answer("Not allowed", show_alert=True)
 
     if q.data == "admin_upload":
-        STATE[uid] = {"step": "class"}
+        STATE[q.from_user.id] = {"step": "class"}
         return await q.message.edit_text("📚 Send Class (11/12)")
 
     if q.data == "admin_stats":
@@ -83,14 +84,14 @@ async def admin_panel(_, q):
         return await q.message.edit_text(f"📊 Users: {u}\n📚 Lectures: {l}")
 
     if q.data == "admin_broadcast":
-        BROADCAST[uid] = True
-        return await q.message.edit_text("📢 Send message to broadcast")
+        BROADCAST[q.from_user.id] = True
+        return await q.message.edit_text("📢 Send broadcast message")
 
     if q.data == "admin_delete":
-        DEL_STATE[uid] = {"step": "class"}
+        DEL_STATE[q.from_user.id] = {"step": "class"}
         return await q.message.edit_text("🗑 Send Class to delete")
 
-# ================= CLASS / CHAPTER FLOW =================
+# ================= CLASS =================
 
 @app.on_callback_query(filters.regex("^class_"))
 async def class_open(_, q):
@@ -109,7 +110,7 @@ async def class_open(_, q):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ================= CHAPTER → SEND ALL =================
+# ================= CHAPTER (BATCH SEND + AUTO DELETE) =================
 
 @app.on_callback_query(filters.regex("^chapter_"))
 async def chapter_open(_, q):
@@ -125,27 +126,33 @@ async def chapter_open(_, q):
 
     await q.message.delete()
 
-   import time
+    for v in vids:
 
-for v in vids:
+        sent = await app.send_video(
+            q.message.chat.id,
+            v["file_id"],
+            caption=v.get("caption", ""),
+            protect_content=True
+        )
 
-    sent = await app.send_video(
-        q.message.chat.id,
-        v["file_id"],
-        caption=v.get("caption", ""),
-        protect_content=True
-    )
-
-    # 🔥 delete after 24 hours
-    await sent.schedule_delete(time.time() + 86400)
-        
+        # ✅ AUTO DELETE AFTER 24 HOURS
+        asyncio.create_task(delete_after(sent, 86400))
 
     await app.send_message(
         q.message.chat.id,
-        "🙏 Thanks for using me!\n\n if you need any other lectures of @llen bun academy sarbam see ww or any teacher you may message here @THE_PHYSICS_LAD_BACKUP📩 @THE_PHYSICS_LAD_BACKUP"
+        "🙏 Enjoy your lectures!\nAuto-delete in 24 hours enabled."
     )
 
-# ================= TEXT ROUTER (UPLOAD / DELETE / BROADCAST) =================
+# ================= AUTO DELETE FUNCTION =================
+
+async def delete_after(message, delay):
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except:
+        pass
+
+# ================= TEXT ROUTER =================
 
 @app.on_message(filters.text & filters.private)
 async def router(_, msg):
