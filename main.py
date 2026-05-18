@@ -178,7 +178,137 @@ async def upload_lecture(client, message):
         await message.reply_text(
             f"❌ Error\n{e}"
         )
+# ================= STATES =================
 
+UPLOAD_STATE = {}
+
+# ================= ADD COMMAND =================
+
+@app.on_message(filters.command("add"))
+async def add_lecture(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    UPLOAD_STATE[message.from_user.id] = {
+        "step": "class"
+    }
+
+    await message.reply_text(
+        "📚 Send Class\n\nExample: 11 or 12"
+    )
+
+# ================= HANDLE TEXT =================
+
+@app.on_message(filters.text & filters.private)
+async def handle_text(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    if message.text.startswith("/"):
+        return
+
+    state = UPLOAD_STATE.get(message.from_user.id)
+
+    if not state:
+        return
+
+    # CLASS
+
+    if state["step"] == "class":
+
+        state["class"] = message.text.strip()
+
+        state["step"] = "chapter"
+
+        await message.reply_text(
+            "📖 Send Chapter Name"
+        )
+
+        return
+
+    # CHAPTER
+
+    if state["step"] == "chapter":
+
+        state["chapter"] = message.text.strip()
+
+        state["step"] = "videos"
+
+        state["lecture_no"] = 1
+
+        await message.reply_text(
+            """
+✅ Chapter Set
+
+Now send videos one by one.
+
+Send /done when finished.
+"""
+        )
+
+        return
+
+# ================= SAVE VIDEOS =================
+
+@app.on_message(filters.video & filters.private)
+async def save_video(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    state = UPLOAD_STATE.get(message.from_user.id)
+
+    if not state:
+        return
+
+    if state["step"] != "videos":
+        return
+
+    class_name = state["class"]
+
+    chapter = state["chapter"]
+
+    lecture_no = state["lecture_no"]
+
+    file_id = message.video.file_id
+
+    await lectures.insert_one({
+
+        "class": class_name,
+
+        "chapter": chapter,
+
+        "lecture_no": lecture_no,
+
+        "lecture_name": f"Lecture {lecture_no}",
+
+        "file_id": file_id
+
+    })
+
+    await message.reply_text(
+        f"✅ Saved Lecture {lecture_no}"
+    )
+
+    state["lecture_no"] += 1
+
+# ================= DONE =================
+
+@app.on_message(filters.command("done"))
+async def done_upload(client, message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    if message.from_user.id in UPLOAD_STATE:
+
+        del UPLOAD_STATE[message.from_user.id]
+
+    await message.reply_text(
+        "✅ Upload Finished"
+    )
 # ================= RUN =================
 
 print("Bot Started...")
