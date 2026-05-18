@@ -6,7 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 API_ID = 39683282
 API_HASH = "ab1cc41ca283d480ebe386b1dce182f3"
-BOT_TOKEN = "8965308397:AAFlZZglV1p5z4o4Caovgw6BaJu2K0oYpYs"
+BOT_TOKEN = "8862580868:AAHk1bsJt1RBaiLpW_n6hUmfmPKdzeN7w2I"
 
 MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appName=Cluster0"
 
