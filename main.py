@@ -296,9 +296,6 @@ async def save_video(client, message):
 
 # ================= DONE =================
 
-@app.on_message(filters.command("done"))
-async def done_upload(client, message):
-
     if message.from_user.id != ADMIN_ID:
         return
 
