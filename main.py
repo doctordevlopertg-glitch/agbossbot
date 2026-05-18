@@ -1,7 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
 
 # ================= CONFIG =================
 
@@ -67,7 +66,7 @@ async def class_open(client, query):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ================= CHAPTER =================
+# ================= CHAPTER (SEND ALL VIDEOS) =================
 
 @app.on_callback_query(filters.regex("^chapter_"))
 async def chapter_open(client, query):
@@ -81,32 +80,16 @@ async def chapter_open(client, query):
         "chapter": chapter
     }).to_list(length=1000)
 
-    buttons = []
+    await query.message.delete()
 
-    for lec in vids:
-        buttons.append([
-            InlineKeyboardButton("▶️ Watch Video", callback_data=f"vid_{lec['_id']}")
-        ])
+    for v in vids:
+        await client.send_video(
+            chat_id=query.message.chat.id,
+            video=v["file_id"],
+            caption=v.get("caption", "")
+        )
 
-    await query.message.edit_text(
-        f"📖 {chapter}",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-# ================= SEND VIDEO =================
-
-@app.on_callback_query(filters.regex("^vid_"))
-async def send_video(client, query):
-
-    lec_id = query.data.split("_")[1]
-
-    lec = await lectures.find_one({"_id": ObjectId(lec_id)})
-
-    await query.message.reply_video(
-        video=lec["file_id"]
-    )
-
-# ================= ADMIN ADD =================
+# ================= ADMIN /add =================
 
 @app.on_message(filters.command("add"))
 async def add(client, message):
@@ -146,7 +129,9 @@ async def text_handler(client, message):
         state["chapter"] = message.text.strip()
         state["step"] = "videos"
 
-        await message.reply_text("📤 Now send all videos one by one")
+        await message.reply_text(
+            "📤 Now send all videos one by one.\nSend /done when finished"
+        )
         return
 
 # ================= SAVE VIDEO =================
@@ -165,7 +150,8 @@ async def save_video(client, message):
     await lectures.insert_one({
         "class": state["class"],
         "chapter": state["chapter"],
-        "file_id": message.video.file_id
+        "file_id": message.video.file_id,
+        "caption": message.caption or ""
     })
 
     await message.reply_text("✅ Saved")
