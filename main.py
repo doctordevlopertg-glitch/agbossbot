@@ -135,7 +135,7 @@ async def chapter_open(_, q):
 
     await app.send_message(
         q.message.chat.id,
-        "🙏 Thanks for using me!\n\n📩 @THE_PHYSICS_LAD_BACKUP"
+        "🙏 Thanks for using me!\n\n if you need any other lectures of @llen bun academy sarbam see ww or any teacher you may message here @THE_PHYSICS_LAD_BACKUP📩 @THE_PHYSICS_LAD_BACKUP"
     )
 
 # ================= TEXT ROUTER (UPLOAD / DELETE / BROADCAST) =================
