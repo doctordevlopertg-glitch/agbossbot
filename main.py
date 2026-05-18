@@ -5,13 +5,15 @@ from bson import ObjectId
 
 # ================= CONFIG =================
 
-API_ID = 123456
-API_HASH = "YOUR_API_HASH"
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+API_ID = 39683282
+API_HASH = "ab1cc41ca283d480ebe386b1dce182f3"
+BOT_TOKEN = "8965308397:AAFlZZglV1p5z4o4Caovgw6BaJu2K0oYpYs"
 
-MONGO_URI = "YOUR_MONGO_URI"
+MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appName=Cluster0"
 
-ADMIN_ID = 123456789
+ADMIN_ID = 7960300322
+
+
 
 # ================= BOT =================
 
