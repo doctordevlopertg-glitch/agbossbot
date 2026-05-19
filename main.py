@@ -13,8 +13,6 @@ MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appNam
 
 ADMIN_ID = 7960300322
 
-
-
 # ================= APP =================
 
 app = Client(
@@ -25,14 +23,17 @@ app = Client(
 )
 
 db = AsyncIOMotorClient(MONGO_URI)["lecture_bot"]
+
 lectures = db["lectures"]
 users = db["users"]
+dpps = db["dpps"]
 
 # ================= STATES =================
 
 STATE = {}
 DEL_STATE = {}
 BROADCAST = {}
+DPP_STATE = {}
 
 # ================= START =================
 
@@ -48,9 +49,15 @@ async def start(_, msg):
     if msg.from_user.id == ADMIN_ID:
 
         keyboard = [
-            [InlineKeyboardButton("📤 Upload", callback_data="admin_upload")],
+
+            [InlineKeyboardButton("📤 Upload Lectures", callback_data="admin_upload")],
+
+            [InlineKeyboardButton("📝 Upload DPP", callback_data="upload_dpp")],
+
             [InlineKeyboardButton("📊 Stats", callback_data="admin_stats")],
+
             [InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
+
             [InlineKeyboardButton("🗑 Delete Chapter", callback_data="admin_delete")]
         ]
 
@@ -61,35 +68,109 @@ async def start(_, msg):
 
     buttons = [
         [InlineKeyboardButton("📚 Class 11", callback_data="class_11")],
-        [InlineKeyboardButton("📚 Class 12", callback_data="class_12")]
+        [InlineKeyboardButton("📚 Class 12", callback_data="class_12")],
+        [InlineKeyboardButton("📝 DPP", callback_data="dpp")]
     ]
 
-    await msg.reply_text("📚 Select Class", reply_markup=InlineKeyboardMarkup(buttons))
+    await msg.reply_text(
+        "📚 Select Option",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+# ================= DPP MENU =================
+
+@app.on_callback_query(filters.regex("^dpp$"))
+async def dpp_menu(_, q):
+
+    buttons = [
+
+        [InlineKeyboardButton("📄 Class 11 DPP", callback_data="dpp_11")],
+
+        [InlineKeyboardButton("📄 Class 12 DPP", callback_data="dpp_12")]
+    ]
+
+    await q.message.edit_text(
+        "📝 Select DPP",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+# ================= SEND DPP =================
+
+@app.on_callback_query(filters.regex("^dpp_"))
+async def send_dpp(_, q):
+
+    class_name = q.data.split("_")[1]
+
+    dpp = await dpps.find_one({
+        "class": class_name
+    })
+
+    if not dpp:
+        return await q.answer("DPP not uploaded", show_alert=True)
+
+    await q.message.reply_document(
+        dpp["file_id"],
+        caption=f"📝 Class {class_name} DPP"
+    )
 
 # ================= ADMIN PANEL =================
 
-@app.on_callback_query(filters.regex("^admin_"))
+@app.on_callback_query(filters.regex("^admin_|^upload_dpp$"))
 async def admin_panel(_, q):
 
     if q.from_user.id != ADMIN_ID:
         return await q.answer("Not allowed", show_alert=True)
 
+    # ================= UPLOAD LECTURES =================
+
     if q.data == "admin_upload":
+
         STATE[q.from_user.id] = {"step": "class"}
-        return await q.message.edit_text("📚 Send Class (11/12)")
+
+        return await q.message.edit_text(
+            "📚 Send Class (11/12)"
+        )
+
+    # ================= UPLOAD DPP =================
+
+    if q.data == "upload_dpp":
+
+        DPP_STATE[q.from_user.id] = True
+
+        return await q.message.edit_text(
+            "📝 Send DPP PDF with caption:\n\n11\nor\n12"
+        )
+
+    # ================= STATS =================
 
     if q.data == "admin_stats":
+
         u = await users.count_documents({})
         l = await lectures.count_documents({})
-        return await q.message.edit_text(f"📊 Users: {u}\n📚 Lectures: {l}")
+
+        return await q.message.edit_text(
+            f"📊 Users: {u}\n📚 Lectures: {l}"
+        )
+
+    # ================= BROADCAST =================
 
     if q.data == "admin_broadcast":
+
         BROADCAST[q.from_user.id] = True
-        return await q.message.edit_text("📢 Send broadcast message")
+
+        return await q.message.edit_text(
+            "📢 Send broadcast message"
+        )
+
+    # ================= DELETE =================
 
     if q.data == "admin_delete":
+
         DEL_STATE[q.from_user.id] = {"step": "class"}
-        return await q.message.edit_text("🗑 Send Class to delete")
+
+        return await q.message.edit_text(
+            "🗑 Send Class to delete"
+        )
 
 # ================= CLASS =================
 
@@ -98,10 +179,18 @@ async def class_open(_, q):
 
     class_name = q.data.split("_")[1]
 
-    chapters = await lectures.distinct("chapter", {"class": class_name})
+    chapters = await lectures.distinct(
+        "chapter",
+        {"class": class_name}
+    )
 
     buttons = [
-        [InlineKeyboardButton(ch, callback_data=f"chapter_{class_name}_{ch}")]
+
+        [InlineKeyboardButton(
+            ch,
+            callback_data=f"chapter_{class_name}_{ch}"
+        )]
+
         for ch in chapters
     ]
 
@@ -110,13 +199,15 @@ async def class_open(_, q):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ================= CHAPTER (BATCH SEND + AUTO DELETE) =================
+# ================= CHAPTER =================
 
 @app.on_callback_query(filters.regex("^chapter_"))
 async def chapter_open(_, q):
 
     data = q.data.split("_")
+
     class_name = data[1]
+
     chapter = "_".join(data[2:])
 
     vids = await lectures.find({
@@ -135,18 +226,21 @@ async def chapter_open(_, q):
             protect_content=True
         )
 
-        # ✅ AUTO DELETE AFTER 24 HOURS
-        asyncio.create_task(delete_after(sent, 86400))
+        asyncio.create_task(
+            delete_after(sent, 86400)
+        )
 
     await app.send_message(
         q.message.chat.id,
-        "🙏 Enjoy your lectures!\nAuto-delete in 24 hours enabled. IF YOU WANT TO ACCEES IT PERMANENTLY WITHOUT COPYRIGHT ISSUES OR ANY OTHER ALL*N BUN ACADEMY SEE W SARVAM OR ANY OTHER LECTURES BOTH HINDI AND ENGLISH MEDIUM MESSAGE HERE @THE_PHYSICS_LAD_BACKUP"
+        "🙏 Enjoy your lectures!\nAuto-delete in 24 hours enabled.IF YOU WANT TO ACCEES IT PERMANENTLY WITHOUT COPYRIGHT ISSUES OR ANY OTHER ALL*N BUN ACADEMY SEE W SARVAM OR ANY OTHER LECTURES BOTH HINDI AND ENGLISH MEDIUM MESSAGE HERE @THE_PHYSICS_LAD_BACKUP"
     )
 
-# ================= AUTO DELETE FUNCTION =================
+# ================= AUTO DELETE =================
 
 async def delete_after(message, delay):
+
     await asyncio.sleep(delay)
+
     try:
         await message.delete()
     except:
@@ -158,6 +252,7 @@ async def delete_after(message, delay):
 async def router(_, msg):
 
     uid = msg.from_user.id
+
     text = msg.text.strip()
 
     # ================= BROADCAST =================
@@ -167,7 +262,9 @@ async def router(_, msg):
         users_list = await users.find().to_list(length=10000)
 
         sent = 0
+
         for u in users_list:
+
             try:
                 await app.send_message(u["id"], text)
                 sent += 1
@@ -175,7 +272,10 @@ async def router(_, msg):
                 pass
 
         BROADCAST.pop(uid, None)
-        return await msg.reply_text(f"📢 Sent to {sent} users")
+
+        return await msg.reply_text(
+            f"📢 Sent to {sent} users"
+        )
 
     # ================= UPLOAD =================
 
@@ -184,14 +284,24 @@ async def router(_, msg):
     if uid == ADMIN_ID and state:
 
         if state["step"] == "class":
+
             state["class"] = text
+
             state["step"] = "chapter"
-            return await msg.reply_text("📖 Send Chapter Name")
+
+            return await msg.reply_text(
+                "📖 Send Chapter Name"
+            )
 
         if state["step"] == "chapter":
+
             state["chapter"] = text
+
             state["step"] = "videos"
-            return await msg.reply_text("📤 Now send videos")
+
+            return await msg.reply_text(
+                "📤 Now send videos"
+            )
 
     # ================= DELETE =================
 
@@ -200,9 +310,14 @@ async def router(_, msg):
     if uid == ADMIN_ID and d:
 
         if d["step"] == "class":
+
             d["class"] = text
+
             d["step"] = "chapter"
-            return await msg.reply_text("📖 Send Chapter Name")
+
+            return await msg.reply_text(
+                "📖 Send Chapter Name"
+            )
 
         if d["step"] == "chapter":
 
@@ -212,7 +327,10 @@ async def router(_, msg):
             })
 
             DEL_STATE.pop(uid, None)
-            return await msg.reply_text("🗑 Deleted")
+
+            return await msg.reply_text(
+                "🗑 Deleted"
+            )
 
 # ================= SAVE VIDEO =================
 
@@ -228,15 +346,60 @@ async def save_video(_, msg):
         return
 
     await lectures.insert_one({
+
         "class": state["class"],
+
         "chapter": state["chapter"],
+
         "file_id": msg.video.file_id,
+
         "caption": msg.caption or ""
+
     })
 
-    await msg.reply_text("✅ Saved")
+    await msg.reply_text(
+        "✅ Lecture Saved"
+    )
+
+# ================= SAVE DPP =================
+
+@app.on_message(filters.document & filters.private)
+async def save_dpp(_, msg):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    if not DPP_STATE.get(msg.from_user.id):
+        return
+
+    if not msg.caption:
+
+        return await msg.reply_text(
+            "❌ Send caption:\n11 or 12"
+        )
+
+    class_name = msg.caption.strip()
+
+    await dpps.delete_many({
+        "class": class_name
+    })
+
+    await dpps.insert_one({
+
+        "class": class_name,
+
+        "file_id": msg.document.file_id
+
+    })
+
+    DPP_STATE.pop(msg.from_user.id, None)
+
+    await msg.reply_text(
+        f"✅ Class {class_name} DPP Saved"
+    )
 
 # ================= RUN =================
 
 print("Bot Started...")
+
 app.run()
