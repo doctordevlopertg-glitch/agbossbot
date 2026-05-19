@@ -84,9 +84,15 @@ async def dpp_menu(_, q):
 
     buttons = [
 
-        [InlineKeyboardButton("📄 Class 11 DPP", callback_data="dpp_11")],
+        [InlineKeyboardButton(
+            "📄 Class 11 DPP",
+            callback_data="dpp_11"
+        )],
 
-        [InlineKeyboardButton("📄 Class 12 DPP", callback_data="dpp_12")]
+        [InlineKeyboardButton(
+            "📄 Class 12 DPP",
+            callback_data="dpp_12"
+        )]
     ]
 
     await q.message.edit_text(
@@ -101,17 +107,24 @@ async def send_dpp(_, q):
 
     class_name = q.data.split("_")[1]
 
-    dpp = await dpps.find_one({
+    files = await dpps.find({
         "class": class_name
-    })
+    }).to_list(length=1000)
 
-    if not dpp:
-        return await q.answer("DPP not uploaded", show_alert=True)
+    if not files:
+        return await q.answer(
+            "No DPP uploaded",
+            show_alert=True
+        )
 
-    await q.message.reply_document(
-        dpp["file_id"],
-        caption=f"📝 Class {class_name} DPP"
-    )
+    await q.message.delete()
+
+    for f in files:
+
+        await q.message.reply_document(
+            f["file_id"],
+            caption=f.get("name", "DPP")
+        )
 
 # ================= ADMIN PANEL =================
 
@@ -135,10 +148,22 @@ async def admin_panel(_, q):
 
     if q.data == "upload_dpp":
 
-        DPP_STATE[q.from_user.id] = True
+        buttons = [
+
+            [InlineKeyboardButton(
+                "📚 Class 11 DPP",
+                callback_data="upload_dpp_11"
+            )],
+
+            [InlineKeyboardButton(
+                "📘 Class 12 DPP",
+                callback_data="upload_dpp_12"
+            )]
+        ]
 
         return await q.message.edit_text(
-            "📝 Send DPP PDF with caption:\n\n11\nor\n12"
+            "📝 Select DPP Class",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
 
     # ================= STATS =================
@@ -171,6 +196,22 @@ async def admin_panel(_, q):
         return await q.message.edit_text(
             "🗑 Send Class to delete"
         )
+
+# ================= DPP CLASS SELECT =================
+
+@app.on_callback_query(filters.regex("^upload_dpp_"))
+async def upload_dpp_class(_, q):
+
+    if q.from_user.id != ADMIN_ID:
+        return
+
+    class_name = q.data.split("_")[-1]
+
+    DPP_STATE[q.from_user.id] = class_name
+
+    await q.message.edit_text(
+        f"📤 Now send ALL PDFs for Class {class_name}"
+    )
 
 # ================= CLASS =================
 
@@ -227,24 +268,32 @@ async def chapter_open(_, q):
         )
 
         asyncio.create_task(
-            delete_after(sent, 86400)
+            delete_after(
+                q.message.chat.id,
+                sent.id
+            )
         )
 
     await app.send_message(
         q.message.chat.id,
-        "🙏 Enjoy your lectures!\nAuto-delete in 24 hours enabled.IF YOU WANT TO ACCEES IT PERMANENTLY WITHOUT COPYRIGHT ISSUES OR ANY OTHER ALL*N BUN ACADEMY SEE W SARVAM OR ANY OTHER LECTURES BOTH HINDI AND ENGLISH MEDIUM MESSAGE HERE @THE_PHYSICS_LAD_BACKUP"
+        "🙏 Enjoy your lectures!\n⏳ Auto-delete in 24 hours enabled.IF YOU WANT TO ACCEES IT PERMANENTLY WITHOUT COPYRIGHT ISSUES OR ANY OTHER ALL*N BUN ACADEMY SEE W SARVAM OR ANY OTHER LECTURES BOTH HINDI AND ENGLISH MEDIUM MESSAGE HERE @THE_PHYSICS_LAD_BACKUP"
     )
 
 # ================= AUTO DELETE =================
 
-async def delete_after(message, delay):
+async def delete_after(chat_id, message_id):
 
-    await asyncio.sleep(delay)
+    await asyncio.sleep(86400)
 
     try:
-        await message.delete()
-    except:
-        pass
+
+        await app.delete_messages(
+            chat_id,
+            message_id
+        )
+
+    except Exception as e:
+        print(e)
 
 # ================= TEXT ROUTER =================
 
@@ -369,33 +418,23 @@ async def save_dpp(_, msg):
     if msg.from_user.id != ADMIN_ID:
         return
 
-    if not DPP_STATE.get(msg.from_user.id):
+    class_name = DPP_STATE.get(msg.from_user.id)
+
+    if not class_name:
         return
-
-    if not msg.caption:
-
-        return await msg.reply_text(
-            "❌ Send caption:\n11 or 12"
-        )
-
-    class_name = msg.caption.strip()
-
-    await dpps.delete_many({
-        "class": class_name
-    })
 
     await dpps.insert_one({
 
         "class": class_name,
 
-        "file_id": msg.document.file_id
+        "file_id": msg.document.file_id,
+
+        "name": msg.document.file_name
 
     })
 
-    DPP_STATE.pop(msg.from_user.id, None)
-
     await msg.reply_text(
-        f"✅ Class {class_name} DPP Saved"
+        f"✅ Saved: {msg.document.file_name}"
     )
 
 # ================= RUN =================
