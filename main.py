@@ -284,7 +284,7 @@ async def chapter_open(_, q):
 
 async def delete_after(chat_id, message_id):
 
-    await asyncio.sleep(60)
+    await asyncio.sleep(10800)
 
     try:
 
