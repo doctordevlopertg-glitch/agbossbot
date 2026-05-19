@@ -122,9 +122,10 @@ async def send_dpp(_, q):
     for f in files:
 
         await q.message.reply_document(
-            f["file_id"],
-            caption=f.get("name", "DPP")
-        )
+    f["file_id"],
+    caption=f.get("name", "DPP"),
+    protect_content=True
+)
 
 # ================= ADMIN PANEL =================
 
@@ -283,7 +284,7 @@ async def chapter_open(_, q):
 
 async def delete_after(chat_id, message_id):
 
-    await asyncio.sleep(86400)
+    await asyncio.sleep(60)
 
     try:
 
