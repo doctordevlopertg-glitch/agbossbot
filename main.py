@@ -79,7 +79,7 @@ async def start(_, msg):
 
 # ================= DPP MENU =================
 
-@app.on_callback_query(filters.regex("^dpp$"))
+@app.on_callback_query(filters.regex("^dpp_(11|12)$"))
 async def dpp_menu(_, q):
 
     buttons = [
