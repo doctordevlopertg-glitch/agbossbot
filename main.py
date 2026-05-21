@@ -79,7 +79,9 @@ async def start(_, msg):
 
 # ================= DPP MENU =================
 
-@app.on_callback_query(filters.regex("^dpp_(11|12)$"))
+# ================= DPP MENU =================
+
+@app.on_callback_query(filters.regex(r"^dpp$"))
 async def dpp_menu(_, q):
 
     buttons = [
@@ -99,10 +101,13 @@ async def dpp_menu(_, q):
         "📝 Select DPP",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
+    )
 
 # ================= SEND DPP =================
 
-@app.on_callback_query(filters.regex("^dpp_"))
+# ================= SEND DPP =================
+
+@app.on_callback_query(filters.regex(r"^dpp_(11|12)$"))
 async def send_dpp(_, q):
 
     class_name = q.data.split("_")[1]
@@ -122,10 +127,10 @@ async def send_dpp(_, q):
     for f in files:
 
         await q.message.reply_document(
-    f["file_id"],
-    caption=f.get("name", "DPP"),
-    protect_content=True
-)
+            f["file_id"],
+            caption=f.get("name", "DPP"),
+            protect_content=True
+        )
 
 # ================= ADMIN PANEL =================
 
