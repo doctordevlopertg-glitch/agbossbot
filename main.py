@@ -129,8 +129,7 @@ async def send_dpp(_, q):
         await q.message.reply_document(
             f["file_id"],
             caption=f.get("name", "DPP"),
-            protect_content=True
-        )
+              )
 
 # ================= ADMIN PANEL =================
 
