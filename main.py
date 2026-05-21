@@ -101,7 +101,7 @@ async def dpp_menu(_, q):
         "📝 Select DPP",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
-    )
+    
 
 # ================= SEND DPP =================
 
