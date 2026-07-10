@@ -1,5 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 
@@ -12,6 +13,16 @@ BOT_TOKEN = "8965308397:AAFlZZglV1p5z4o4Caovgw6BaJu2K0oYpYs"
 MONGO_URI = "mongodb+srv://doctorprotg:1234@cluster0.jdd1egz.mongodb.net/?appName=Cluster0"
 
 ADMIN_ID = 7960300322
+FORCE_SUB_CHANNEL = "@PHYSICSAHOLIC_CHANNEL"
+
+async def subscribed(user_id):
+    try:
+        m = await app.get_chat_member(FORCE_SUB_CHANNEL, user_id)
+        return m.status in ["member","administrator","creator"]
+    except UserNotParticipant:
+        return False
+    except Exception:
+        return False
 
 # ================= APP =================
 
@@ -46,6 +57,15 @@ async def start(_, msg):
         upsert=True
     )
 
+    if not await subscribed(msg.from_user.id):
+        return await msg.reply_text(
+            "🚫 Please join our channel to use this bot.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL.replace('@','')}")],
+                [InlineKeyboardButton("✅ Try Again", callback_data="check_sub")]
+            ])
+        )
+
     if msg.from_user.id == ADMIN_ID:
 
         keyboard = [
@@ -76,6 +96,20 @@ async def start(_, msg):
         "📚 Select Option",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
+
+
+
+@app.on_callback_query(filters.regex("^check_sub$"))
+async def check_sub(_, q):
+    if not await subscribed(q.from_user.id):
+        return await q.answer("❌ Please join the channel first.", show_alert=True)
+    await q.message.delete()
+    buttons=[
+        [InlineKeyboardButton("📚 Class 11", callback_data="class_11")],
+        [InlineKeyboardButton("📚 Class 12", callback_data="class_12")],
+        [InlineKeyboardButton("📝 DPP", callback_data="dpp")]
+    ]
+    await app.send_message(q.message.chat.id,"📚 Select Option",reply_markup=InlineKeyboardMarkup(buttons))
 
 # ================= DPP MENU =================
 
