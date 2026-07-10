@@ -1,6 +1,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
+from pyrogram.enums import ChatMemberStatus
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 
@@ -17,11 +18,15 @@ FORCE_SUB_CHANNEL = "@PHYSICSAHOLIC_CHANNEL"
 
 async def subscribed(user_id):
     try:
-        m = await app.get_chat_member(FORCE_SUB_CHANNEL, user_id)
-        return m.status in ["member","administrator","creator"]
-    except UserNotParticipant:
-        return False
-    except Exception:
+        member = await app.get_chat_member(FORCE_SUB_CHANNEL, user_id)
+        print("Status:", member.status)
+        return member.status in (
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.OWNER,
+        )
+    except Exception as e:
+        print("ForceSub Error:", repr(e))
         return False
 
 # ================= APP =================
